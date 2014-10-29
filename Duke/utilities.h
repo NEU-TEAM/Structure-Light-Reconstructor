@@ -25,12 +25,12 @@ public:
     static cv::Point3f		pixelToImageSpace(cv::Point2f p, VirtualCamera cam);
     static cv::Point2f		undistortPoints( cv::Point2f p, VirtualCamera cam);
     static CvScalar			planeRayInter(CvScalar planeNormal,CvScalar planePoint, CvScalar rayVector, CvScalar rayPoint );
-    static double			matGet2D(cv::Mat m, int x, int y);
+    static double			matGet2D(cv::Mat m, int row, int col);
     static double			matGet3D(cv::Mat m, int x, int y, int i);
     static cv::Vec3d		matGet3D(cv::Mat m, int x, int y);
     static void				matSet3D(cv::Mat m, int x, int y, cv::Vec3d);
     static void				matSet3D(cv::Mat m, int x, int y,int i, double val);
-    static void				matSet2D(cv::Mat m, int x, int y, double val);
+    static void				matSet2D(cv::Mat m, int row, int col, double val);
     static void				autoContrast(cv::Mat img_in, cv::Mat &img_out);
     static void				autoContrast(IplImage *img_in, IplImage *img_out);
     static void				exportMat(const char *path, cv::Mat m);

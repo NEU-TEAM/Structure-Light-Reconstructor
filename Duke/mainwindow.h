@@ -179,11 +179,22 @@ private:
     HHV	m_hhv_1;			///< 数字摄像机句柄
     HHV	m_hhv_2;
 
+    BYTE *ppBuf_1[1];
+    BYTE *ppBuf_2[1];
+
     BYTE *m_pRawBuffer_1;		///< 采集图像原始数据缓冲区
     BYTE *m_pRawBuffer_2;
 
     static int CALLBACK SnapThreadCallback(HV_SNAP_INFO *pInfo);
     ////////////////////////////////////////////////
+    ///与set对话框有关的变量
+    int black_ ;
+    int white_;
+    bool isAutoContrast;
+    bool isSaveAutoContrast;
+    bool isRaySampling;
+    bool isExportObj;
+    bool isExportPly;
 
 private slots:
     void newproject();
@@ -199,6 +210,7 @@ private slots:
     void scan();
     void reconstruct();
     void set();
+    void getSetInfo();
 };
 
 #endif // MAINWINDOW_H

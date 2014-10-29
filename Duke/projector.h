@@ -12,19 +12,19 @@
 class Projector : public QWidget
 {
 public:
-    Projector(int projW, int projH, int scrnW);
+    Projector(QWidget *parent, int projW, int projH, int xos, int yos);
     ~Projector();
     void showImg(IplImage *img);
     void showMatImg(cv::Mat img);
     QImage *IplImageToQPixmap(const IplImage *img);
     IplImage* QImageToIplImage(const QImage *qImage);
-    QWidget *pW;
     QLabel *imageLabel;//hold image.
     void displaySwitch(bool isWhite);
     void opencvWindow();
     void destoryWindow();//delete the projector window created by cv after showImg
 private:
-    int scrnwidth;
+    int xoffset;
+    int yoffset;
     int height;
     int width;
 };

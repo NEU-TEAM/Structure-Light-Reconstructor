@@ -65,7 +65,7 @@ IplImage* GrayCodes::getNextImg()
     if(currentImgNum<numOfImgs)
     {
         currentImgNum++;
-        return grayCodes[currentImgNum-1];
+        return grayCodes[currentImgNum - 1];//currentImgNum是从0开始的，++操作后变为1，所以要-1
     }
     else
         return NULL;
@@ -178,10 +178,10 @@ void GrayCodes::save()
 
 int GrayCodes::grayToDec(cv::vector<bool> gray)//convert a gray code sequence to a decimal number
 {
-    int dec=0;
+    int dec = 0;
     bool tmp = gray[0];
     if(tmp)
-        dec+=(int) pow((float)2,int (gray.size() -1));
+        dec += (int) pow((float)2,int (gray.size() -1));
     for(int i=1; i< gray.size(); i++)
     {
         tmp=Utilities::XOR(tmp,gray[i]);

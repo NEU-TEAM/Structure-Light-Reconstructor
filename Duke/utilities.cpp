@@ -122,31 +122,31 @@ CvScalar Utilities::planeRayInter(CvScalar planeNormal,CvScalar planePoint, CvSc
     return point;
 }
 
-double Utilities::matGet2D(cv::Mat m, int x, int y)
+double Utilities::matGet2D(cv::Mat m, int row, int col)
 {
     int type = m.type();
     switch(type)
     {
         case CV_8U:
-            return m.at<uchar>(y,x);
+            return m.at<uchar>(row,col);
             break;
         case CV_8S:
-            return m.at<schar>(y,x);
+            return m.at<schar>(row,col);
             break;
         case CV_16U:
-            return m.at<ushort>(y,x);
+            return m.at<ushort>(row,col);
             break;
         case CV_16S:
-            return m.at<short>(y,x);
+            return m.at<short>(row,col);
             break;
         case CV_32S:
-            return m.at<int>(y,x);
+            return m.at<int>(row,col);
             break;
         case CV_32F:
-            return m.at<float>(y,x);
+            return m.at<float>(row,col);
             break;
         case CV_64F:
-            return m.at<double>(y,x);
+            return m.at<double>(row,col);
             break;
     }
 }
@@ -223,32 +223,32 @@ cv::Vec3d Utilities::matGet3D(cv::Mat m, int x, int y)
     }
 }
 
-void Utilities::matSet2D(cv::Mat m, int x, int y, double val)
+void Utilities::matSet2D(cv::Mat m, int row, int col, double val)
 {
     int type = m.type();
 
     switch(type)
     {
         case CV_8U:
-            m.at<uchar>(y,x)  = (uchar) val;
+            m.at<uchar>(row,col)  = (uchar) val;
             break;
         case CV_8S:
-            m.at<schar>(y,x)  = (schar) val;
+            m.at<schar>(row,col)  = (schar) val;
             break;
         case CV_16U:
-            m.at<ushort>(y,x) = (ushort) val;
+            m.at<ushort>(row,col) = (ushort) val;
             break;
         case CV_16S:
-            m.at<short>(y,x)  = (short) val;
+            m.at<short>(row,col)  = (short) val;
             break;
         case CV_32S:
-            m.at<int>(y,x)	  = (int) val;
+            m.at<int>(row,col)	  = (int) val;
             break;
         case CV_32F:
-            m.at<float>(y,x)  = (float) val;
+            m.at<float>(row,col)  = (float) val;
             break;
         case CV_64F:
-            m.at<double>(y,x) = (double) val;
+            m.at<double>(row,col) = (double) val;
             break;
     }
 }
@@ -337,12 +337,11 @@ bool direction(cv::Point p1, cv::Point p2,cv::Point p3)
         return true;
 }
 
-
-void Utilities::autoContrast(cv::Mat img_in, cv::Mat &img_out)
+void Utilities::autoContrast(cv::Mat img_in, cv::Mat &img_out)//自动对比度调整
 {
     double min=0,max=0;
     std::vector<cv::Mat> bgr;
-    cv::split(img_in,bgr);
+    cv::split(img_in,bgr);//The functions split split a multi-channel array into separate single-channel arrays
     for(int i=0; i<3; i++)
     {
         cv::minMaxIdx(bgr[i],&min,&max);
@@ -352,7 +351,7 @@ void Utilities::autoContrast(cv::Mat img_in, cv::Mat &img_out)
         bgr[i]-=min;
         bgr[i]*=a;
     }
-    cv::merge(bgr,img_out);
+    cv::merge(bgr,img_out);//The functions merge merge several arrays to make a single multi-channel array
 }
 
 void Utilities::autoContrast(IplImage *img_in, IplImage *img_out)
