@@ -2,7 +2,7 @@ TEMPLATE = app
 
 TARGET = Duke
 
-QT += qml quick widgets
+QT += qml quick widgets opengl
 
 SOURCES += \
     graycodes.cpp \
@@ -14,7 +14,10 @@ SOURCES += \
     reconstruct.cpp \
     set.cpp \
     utilities.cpp \
-    virtualcamera.cpp
+    virtualcamera.cpp \
+    plyloader.cpp \
+    glwidget.cpp \
+    cameracalibration.cpp
 
 RESOURCES += \
     Resource/res.qrc
@@ -28,10 +31,11 @@ LIBS += -LE:\opencv\build\x86\vc10\lib\
 -lopencv_highgui249d\
 -lopencv_imgproc249d\
 -lopencv_features2d249d\
+-lopencv_calib3d249d\
 -lHVDAILT\
 -lHVExtend\
 -lHVUtil\
--lRaw2Rgb
+-lRaw2Rgb\
 
 # Default rules for deployment.
 include(deployment.pri)
@@ -45,5 +49,14 @@ HEADERS += \
     reconstruct.h \
     set.h \
     utilities.h \
-    virtualcamera.h
+    virtualcamera.h \
+    plyloader.h \
+    glwidget.h \
+    cameracalibration.h
+
+FORMS += \
+    mainwindow.ui \
+    Set.ui
+
+TRANSLATIONS += en.ts zh.ts
 

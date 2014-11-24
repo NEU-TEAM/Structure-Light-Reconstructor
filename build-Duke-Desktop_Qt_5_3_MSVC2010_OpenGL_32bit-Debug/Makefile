@@ -188,6 +188,7 @@ Makefile: ..\Duke\Duke.pro C:\Qt\Qt5.3.2\5.3\msvc2010_opengl\mkspecs\win32-msvc2
 		C:/Qt/Qt5.3.2/5.3/msvc2010_opengl/lib/qtmaind.prl \
 		C:/Qt/Qt5.3.2/5.3/msvc2010_opengl/lib/Qt5Cored.prl \
 		C:/Qt/Qt5.3.2/5.3/msvc2010_opengl/lib/Qt5Quick.prl \
+		C:/Qt/Qt5.3.2/5.3/msvc2010_opengl/lib/Qt5OpenGL.prl \
 		C:/Qt/Qt5.3.2/5.3/msvc2010_opengl/lib/Qt5Qml.prl \
 		C:/Qt/Qt5.3.2/5.3/msvc2010_opengl/lib/Qt5Widgets.prl \
 		C:/Qt/Qt5.3.2/5.3/msvc2010_opengl/lib/Qt5Network.prl \
@@ -309,6 +310,7 @@ C:\Qt\Qt5.3.2\5.3\msvc2010_opengl\mkspecs\features\lex.prf:
 C:/Qt/Qt5.3.2/5.3/msvc2010_opengl/lib/qtmaind.prl:
 C:/Qt/Qt5.3.2/5.3/msvc2010_opengl/lib/Qt5Cored.prl:
 C:/Qt/Qt5.3.2/5.3/msvc2010_opengl/lib/Qt5Quick.prl:
+C:/Qt/Qt5.3.2/5.3/msvc2010_opengl/lib/Qt5OpenGL.prl:
 C:/Qt/Qt5.3.2/5.3/msvc2010_opengl/lib/Qt5Qml.prl:
 C:/Qt/Qt5.3.2/5.3/msvc2010_opengl/lib/Qt5Widgets.prl:
 C:/Qt/Qt5.3.2/5.3/msvc2010_opengl/lib/Qt5Network.prl:

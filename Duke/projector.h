@@ -7,12 +7,13 @@
 #include <QWidget>
 #include <QLabel>
 #include <QPicture>
+
 #include <QMainWindow>
 
 class Projector : public QWidget
 {
 public:
-    Projector(QWidget *parent, int projW, int projH, int xos, int yos);
+    Projector(QWidget *parent, int scanW, int scanH, int projW, int projH, int xos, int yos);
     ~Projector();
     void showImg(IplImage *img);
     void showMatImg(cv::Mat img);
@@ -22,6 +23,10 @@ public:
     void displaySwitch(bool isWhite);
     void opencvWindow();
     void destoryWindow();//delete the projector window created by cv after showImg
+
+protected:
+        void paintEvent(QPaintEvent *event);
+
 private:
     int xoffset;
     int yoffset;
