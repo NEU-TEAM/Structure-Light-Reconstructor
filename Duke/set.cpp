@@ -6,10 +6,6 @@
 
 #include "ui_Set.h"
 
-int projGrid_w;
-int projGrid_h;
-int boardCellNum_h;
-int boardCellNum_v;
 
 Set::Set(QMainWindow *parent) : QDialog(parent),
     set(new Ui::SetDialog)
@@ -42,16 +38,14 @@ void Set::createConfigurationFile()//如果是槽函数，那么void声明不可
     scan_h = set->scanResV->value();
     cam_w = set->camResH->value();
     cam_h = set->camResV->value();
+    cell_w = set->cellWidth->value();
+    cell_h = set->cellHeight->value();
     black_threshold = set->blackThresholdEdit->value();
     white_threshold = set->whiteThresholdEdit->value();
     if(set->autoContrastCheck->isChecked() == true)
         autoContrast = true;
     else
         autoContrast = false;
-    if(set->saveAutoContrastImagesCheck->isChecked() == true)
-        saveAutoContrast = true;
-    else
-        saveAutoContrast = false;
     if(set->raySamplingCheck->isChecked() == true)
         raySampling = true;
     else
@@ -71,7 +65,6 @@ void Set::createSetFile()
 {
     int autoc, autocs, ray;
     autoc = boolToInt(autoContrast);
-    autocs = boolToInt(saveAutoContrast);
     ray = boolToInt(raySampling);
 
     const QString &fileName = saveSetPath +"/set.xml";

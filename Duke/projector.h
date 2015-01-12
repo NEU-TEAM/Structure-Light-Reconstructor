@@ -7,6 +7,7 @@
 #include <QWidget>
 #include <QLabel>
 #include <QPicture>
+#include <QPainter>
 
 #include <QMainWindow>
 
@@ -17,17 +18,22 @@ public:
     ~Projector();
     void showImg(IplImage *img);
     void showMatImg(cv::Mat img);
+
+    ////没有用到的功能
     QImage *IplImageToQPixmap(const IplImage *img);
     IplImage* QImageToIplImage(const QImage *qImage);
     QLabel *imageLabel;//hold image.
+    ////
+
     void displaySwitch(bool isWhite);
     void opencvWindow();
     void destoryWindow();//delete the projector window created by cv after showImg
 
-protected:
-        void paintEvent(QPaintEvent *event);
+    void setCrossVisable(bool flag);
+    void paintEvent(QPaintEvent *event);
 
 private:
+    bool crossVisible;
     int xoffset;
     int yoffset;
     int height;

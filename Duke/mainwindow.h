@@ -9,6 +9,7 @@
 #include <QTimer>
 
 #include "set.h"
+#include "dotmatch.h"
 #include <opencv/highgui.h>
 #include <opencv/cv.h>
 #include "projector.h"
@@ -16,13 +17,19 @@
 #include "meshcreator.h"
 #include "glwidget.h"
 #include "cameracalibration.h"
-
+#include "blobdetector.h"
+#include "graycodes.h"
+#include "multifrequency.h"
 
 #include "Windows.h"//加载此头文件以解决大恒相机头文件类型未定义问题
 #include <HVDAILT.h>
 #include <Raw2Rgb.h>
 
 #define WM_SNAP_CHANGE		(WM_USER + 100)
+
+#define PATHCALIB 0
+#define PATHSCAN 1
+#define PATHRECON 2
 
 namespace Ui {
 class MainWindow;
@@ -36,6 +43,7 @@ public:
     MainWindow(QWidget *parent = 0);
     ~MainWindow();
     Set *setDialog;
+    DotMatch *dm;
     GLWidget *displayModel;
 
     QString projectPath;
@@ -48,17 +56,25 @@ public:
     int cameraWidth;
     int cameraHeight;
 
+    int scanSquenceNo;//表示当前正在进行的扫描序列数，从0开始
+
 private:
     Ui::MainWindow *ui;
     CameraCalibration *calibrator;
+    BlobDetector *blob;
+    GrayCodes *grayCode;
+    MultiFrequency *mf;
+    Projector *pj;
 
     void createConnections();
     void createCentralWindow(QWidget *parent);
-    void captureImage(int saveCount, bool dispaly);
+    void captureImage(QString pref, int saveCount, bool dispaly);
+    void findPoint();
     void getScreenGeometry();
     void closeCamera();
     void generatePath(int type);
-    void selectPath(int type);
+
+    ///---------------相机相关函数---------------///
 
     void OnSnapexOpen();
     void OnSnapexStart();
@@ -66,28 +82,26 @@ private:
     void OnSnapexClose();
     int OnSnapChange();
 
+    ///---------------辅助功能---------------///
+
     void progressPop(int up);
+    void drawCross(QPainter &p, int x, int y);
 
     QLabel *msgLabel;//show message in the bottom of the window
 
     QTimer *timer;
-
-    //QImage *image_1;//由rawbuffer得到的图像指针
     QImage image_1;
-    QImage *image_2;
+    QImage image_2;
     QPixmap pimage_1;//由图像指针得到的.png格式图像
     QPixmap pimage_2;
 
     bool cameraOpened;
     bool isProjectorOpened;
     bool isConfigured;
-    Projector *pj;
-    int saveCon;//count the photo captured.
+    int saveCount;//count the photo captured.
 
     QString path_1;
     QString path_2;
-
-    //CameraCalibration *calibrator;
 
     ///////////////////////////////
     HHV	m_hhv_1;			///< 数字摄像机句柄
@@ -105,7 +119,6 @@ private:
     int black_ ;
     int white_;
     bool isAutoContrast;
-    bool isSaveAutoContrast;
     bool isRaySampling;
     bool isExportObj;
     bool isExportPly;
@@ -115,19 +128,32 @@ private slots:
     void openproject();
 
     void opencamera();
+    void exposurecontrol();
     void readframe();
+
+    void selectPath(int PATH);
+
     void capturecalib();
     void redocapture();
     void projectorcontrol();
 
     void calib();
     void calibration();
+
     void scan();
+    void pointmatch();
+    void refindmatch();
+    void startscan();
+    void testmulitfreq();
+
     void reconstruct();
+    void startreconstruct();
+
     void set();
     void getSetInfo();
 
     void changePointSize(int psize);
+    void loadTestModel();
     void switchlanguage();
 
 };

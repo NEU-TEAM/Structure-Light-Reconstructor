@@ -1,37 +1,20 @@
 #include "reconstruct.h"
 #include <QMessageBox>
 
-Reconstruct::Reconstruct(int numOfCams_,QString path)
+Reconstruct::Reconstruct()
 {
-    numOfCams = numOfCams_;
+    numOfCams = 2;
     mask = NULL;
     decRows = NULL;
     decCols = NULL;
     points3DProjView = NULL;
     autoContrast_ = false;
-    saveAutoContrast_ = false;
     cameras = new  VirtualCamera[2];//生成virtualcamera的两个实例，保存在数组cameras[2]
     camsPixels = new cv::vector<cv::Point>*[2];
     calibFolder = new QString[2];
     scanFolder = new QString[2];
     imgPrefix = new QString[2];
     pathSet = false;
-    for(int i = 0; i< 2; i++)
-    {
-        QString pathI;
-        if(i==0){
-            pathI = path + "/scan/left/";//Load Images for reconstruction
-        }
-        else{
-            pathI = path + "/scan/right/";//输入path为projectPath
-        }
-        camsPixels[i] = NULL;
-        scanFolder[i] = pathI;
-        if(i==0)
-            imgPrefix[i] = "L";
-        else
-            imgPrefix[i] = "R";
-    }
     imgSuffix = ".png";//这里暂时认为图片后缀为.png
 }
 Reconstruct::~Reconstruct()
@@ -39,16 +22,6 @@ Reconstruct::~Reconstruct()
     unloadCamImgs();
     if(points3DProjView)
         delete points3DProjView ;
-}
-
-void Reconstruct::enableSavingAutoContrast()
-{
-    saveAutoContrast_ = true;
-}
-
-void Reconstruct::disableSavingAutoContrast()
-{
-    saveAutoContrast_ = false;
 }
 
 void Reconstruct::enableRaySampling()
@@ -99,7 +72,7 @@ void Reconstruct::decodePaterns()
 bool Reconstruct::loadCameras()//Load calibration data into camera[i]
 {
     bool loaded;
-    for(int i=0; i<numOfCams; i++)
+    for(int i = 0; i < 2; i++)//这里为了处理方便将numofcam直接替换为2
     {
         QString path;
         path = calibFolder[i];
@@ -119,6 +92,18 @@ bool Reconstruct::loadCameras()//Load calibration data into camera[i]
         path = calibFolder[i];
         path += "cam_trans_vectror.txt";
         cameras[i].loadTranslationVector(path);
+
+        path = savePath_;
+        path += "/calib/fundamental_mat.txt";
+        cameras[i].loadFundamentalMatrix(path);
+
+        path = savePath_;
+        path += "/calib/H1_mat.txt";
+        cameras[i].loadHomoMatrix(path, 1);
+
+        path = savePath_;
+        path += "/calib/H2_mat.txt";
+        cameras[i].loadHomoMatrix(path, 2);
 
         cameras[i].height = 0;
         cameras[i].width = 0;
@@ -148,14 +133,6 @@ bool Reconstruct::loadCamImgs(QString folder, QString prefix, QString suffix)//l
             if(autoContrast_)//auto contrast
             {
                 Utilities::autoContrast(tmp,tmp);
-                if(saveAutoContrast_)
-                {
-                    QString p;
-                    p = savePath_ + "/AutoContrastSave/" + QString::number(i+1,10) + suffix;
-                    std::string cstr;
-                    cstr = std::string((const char *)p.toLocal8Bit());
-                    cv::imwrite(cstr,tmp);
-                }
             }
             if(i==0)
             {
@@ -228,7 +205,7 @@ bool Reconstruct::runReconstruction()
                                        //在此之前camera相当于一个temp，注意二者单复数有区别
         camsPixels[i] = new cv::vector<cv::Point>[proj_h*proj_w];
         camPixels = camsPixels[i];
-        runSucess = loadCamImgs(scanFolder[i],imgPrefix[i],imgSuffix);
+        runSucess = loadCamImgs(scanFolder[i], imgPrefix[i], imgSuffix);
         ///截至这一步，实例camera的position、width、height属性已被赋值，camera对应cameras[i]
 
         if(!runSucess)//如果加载图片失败，中断
@@ -325,9 +302,14 @@ void Reconstruct::triangulation(cv::vector<cv::Point> *cam1Pixels, VirtualCamera
 {
     int w = proj_w;
     int h = proj_h;
-    //start reconstraction
-    //int load = 0;
-    //reconstraction for every projector pixel
+    cv::Mat matTransfer(3,4,CV_32F);
+    if (scanSN_ > 0)
+    {
+        /********加载刚体变换矩阵*********/
+        QString loadPath = savePath_ + "/scan/transfer_mat" + QString::number(scanSN_) + ".txt";
+        camera1.loadMatrix(matTransfer, 3, 4, loadPath.toStdString());
+    }
+
     for(int i = 0; i < w; i++)
     {
         for(int j = 0; j < h; j++)
@@ -374,29 +356,60 @@ void Reconstruct::triangulation(cv::vector<cv::Point> *cam1Pixels, VirtualCamera
                     Utilities::normalize(ray2Vector);
 
                     cv::Point3f interPoint;
+                    cv::Point3f refinedPoint;
 
                     bool ok = Utilities::line_lineIntersection(camera1.position,ray1Vector,camera2.position,ray2Vector,interPoint);
 
                     if(!ok)
                         continue;
 
+                    /****以下判断为多次重建得到的点云拼接做准备****/
+
+                    if (scanSN_ > 0)
+                    {
+                        float point[] = {interPoint.x, interPoint.y, interPoint.z, 1};
+                        cv::Mat pointMat(4, 1, CV_32F, point);
+                        cv::Mat refineMat(3, 1, CV_32F);
+                        refineMat = matTransfer * pointMat;
+                        refinedPoint.x = refineMat.at<float>(0, 0);
+                        refinedPoint.y = refineMat.at<float>(1, 0);
+                        refinedPoint.z = refineMat.at<float>(2, 0);
+                    }
+                    else
+                        refinedPoint = interPoint;
                     //get pixel color for the second camera view
                     //color2 = Utilities::matGet3D( colorImgs[cam2index], cam2Pixs[c2].x, cam2Pixs[c2].y);//这里有问题
-
-                    points3DProjView->addPoint(i, j, interPoint);//这里有问题, (color1 + color2)/2暂时去掉
+                    points3DProjView->addPoint(i, j, refinedPoint);
                 }
             }
         }
     }
 }
 
-void Reconstruct::getParameters(int scanw, int scanh, int camw, int camh, bool autocontrast, bool saveautocontrast, QString savePath)
+void Reconstruct::getParameters(int scanw, int scanh, int camw, int camh, int scanSN, bool autocontrast, QString savePath)
 {
     proj_w = scanw;
     proj_h = scanh;
     cameraWidth = camw;
     cameraHeight = camh;
     autoContrast_ = autocontrast;
-    saveAutoContrast_ = saveautocontrast;
     savePath_ = savePath;//equal to projectPath
+    scanSN_ = scanSN;
+
+    for(int i = 0; i < 2; i++)
+    {
+        QString pathI;
+        if(i==0){
+            pathI = savePath + "/scan/left/";//Load Images for reconstruction
+        }
+        else{
+            pathI = savePath + "/scan/right/";
+        }
+        camsPixels[i] = NULL;
+        scanFolder[i] = pathI;
+        if(i == 0)
+            imgPrefix[i] = QString::number(scanSN) + "/L";
+        else
+            imgPrefix[i] = QString::number(scanSN) +"/R";
+    }
 }

@@ -9,6 +9,9 @@ VirtualCamera::VirtualCamera()
     distortion = NULL;
     rotationMatrix = NULL;
     translationVector = NULL;
+    fundamentalMatrix = NULL;
+    homoMat1 = NULL;
+    homoMat2 = NULL;
     fc.x=0;
     fc.y=0;
     cc.x=0;
@@ -49,6 +52,19 @@ void VirtualCamera::loadRotationMatrix(QString path)
 void VirtualCamera::loadTranslationVector(QString path)
 {
     loadMatrix(translationVector, 3, 1, path.toStdString());
+}
+
+void VirtualCamera::loadFundamentalMatrix(QString path)
+{
+    loadMatrix(fundamentalMatrix, 3, 3, path.toStdString());
+}
+
+void VirtualCamera::loadHomoMatrix(QString path, int i)
+{
+    if (i == 1)
+        loadMatrix(homoMat1, 3, 3, path.toStdString());
+    else
+        loadMatrix(homoMat2, 3, 3, path.toStdString());
 }
 
 int VirtualCamera::loadMatrix(cv::Mat &matrix, int rows, int cols, std::string file)
