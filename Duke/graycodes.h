@@ -9,29 +9,26 @@ using std::ofstream;
 #include <math.h>
 #include "utilities.h"
 
-#define GRAY_MAX_NUM 100
+#define GRAY_MAX_NUM 44
 
 class GrayCodes
 {
 public:
-    GrayCodes(int projW, int projH);
+    GrayCodes(int scanW, int scanH, bool useepi);
     ~GrayCodes();
 
-    void unload();
+    cv::Mat grayCodes[GRAY_MAX_NUM];
+    bool useEpi;//是否应用极线校正
+
     int getNumOfImgs();
-    IplImage* getNextImg();
-    IplImage* getImg(int num);
 
     void generateGrays();
 
-    void save();
     static int grayToDec(cv::vector<bool> gray);
-    int GrayCodes::getNumOfRowBits();
-    int GrayCodes::getNumOfColBits();
+    int getNumOfRowBits();
+    int getNumOfColBits();
 
 protected:
-    IplImage* grayCodes[GRAY_MAX_NUM];
-    IplImage* colorCodes[GRAY_MAX_NUM];
 
     void calNumOfImgs();
     void allocMemForImgs();

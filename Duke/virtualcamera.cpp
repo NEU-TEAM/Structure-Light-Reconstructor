@@ -72,16 +72,13 @@ int VirtualCamera::loadMatrix(cv::Mat &matrix, int rows, int cols, std::string f
     std:: ifstream in1;
     in1.open(file);
     if(!in1)
-    {
         return -1;
-    }
+
     if(!matrix.empty())
         matrix.release();
-    matrix = cv::Mat(rows, cols, CV_32F);//cv_32f表示数据精度32-bit ﬂoating-point numbers ( -FLT_MAX..FLT_MAX, INF, NAN )
-    for(int i = 0; i < rows; i++)
-    {
-        for(int j = 0; j < cols; j++)
-        {
+    matrix = cv::Mat(rows, cols, CV_32F);
+    for(int i = 0; i < rows; i++){
+        for(int j = 0; j < cols; j++){
             float val;
             in1>>val;
             Utilities::matSet2D(matrix, i, j, val);

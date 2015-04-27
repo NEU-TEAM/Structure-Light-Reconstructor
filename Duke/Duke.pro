@@ -20,7 +20,13 @@ SOURCES += \
     cameracalibration.cpp \
     dotmatch.cpp \
     multifrequency.cpp \
-    blobdetector.cpp
+    blobdetector.cpp \
+    dahengcamera.cpp \
+    baslercamera.cpp \
+    focusassistant.cpp \
+    manualmatch.cpp \
+    imageviewer.cpp \
+    stereorect.cpp
 
 RESOURCES += \
     Resource/res.qrc
@@ -32,16 +38,22 @@ D:\mrpt\libs\scanmatching\include\
 D:\mrpt\include\mrpt\mrpt-config\
 D:\glm\
 E:\freeglut-2.8.1\include\
+D:\genicam\library\cpp\include\
+D:\pylon\include\
 
-LIBS += -LE:\opencv\build\x86\vc10\lib\
--LD:\VC\lib\
--LD:\mrpt\lib\
+LIBS += -LD:\mrpt\lib\
 -LE:\freeglut-2.8.1\lib\x86\Debug\
+-LE:\opencv\build\x86\vc10\lib\
+-LD:\VC\lib\
+-LD:\genicam\library\cpp\lib\win32_i86\
+-LD:\pylon\lib\Win32\
 -lopencv_core249d\
 -lopencv_highgui249d\
 -lopencv_imgproc249d\
 -lopencv_features2d249d\
 -lopencv_calib3d249d\
+-lopencv_nonfree249d\
+-lopencv_flann249d\
 -lHVDAILT\
 -lHVExtend\
 -lHVUtil\
@@ -49,6 +61,12 @@ LIBS += -LE:\opencv\build\x86\vc10\lib\
 -llibmrpt-base122-dbg\
 -llibmrpt-scanmatching122-dbg\
 -lfreeglut\
+-lGCBase_MD_VC100_v2_3\
+-lPylonBase_MD_VC100\
+-lPylonBootstrapper\
+-lPylonGigE_MD_VC100_TL\
+-lPylonUsb_MD_VC100_TL\
+-lPylonUtility_MD_VC100\
 
 
 # Default rules for deployment.
@@ -69,11 +87,20 @@ HEADERS += \
     cameracalibration.h \
     dotmatch.h \
     multifrequency.h \
-    blobdetector.h
+    blobdetector.h \
+    dahengcamera.h \
+    baslercamera.h \
+    focusassistant.h \
+    manualmatch.h \
+    imageviewer.h \
+    stereorect.h
 
 FORMS += \
     mainwindow.ui \
-    Set.ui
+    Set.ui \
+    focusassistant.ui \
+    manualmatch.ui \
+    imageviewer.ui
 
 TRANSLATIONS += en.ts zh.ts
 

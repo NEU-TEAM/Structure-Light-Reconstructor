@@ -1,30 +1,27 @@
 #ifndef RECONSTRUCT_H
 #define RECONSTRUCT_H
 
-//#pragma comment(lib,"opencv_highgui249d.lib")
-
 #include <opencv/cv.h>
 #include <opencv/highgui.h>
 #include "graycodes.h"
 #include "virtualcamera.h"
 #include "pointcloudimage.h"
 #include "set.h"
+#include "stereorect.h"
 
-#define RECONSTRUCTION_SAMPLING_ON
-#define SAMPLES_NUM 25
-#define COL_GRAY_OFFSET 0
-#define ROW_GRAY_OFFSET 0
-#define EXPORT_MASKED_POINTS
-#define SCALE 1
+//#define USE_STEREOCALIB_DATA
 
 class Reconstruct
 {
 public:
-    Reconstruct();
+    Reconstruct(bool useEpi);
     ~Reconstruct();
 
     bool loadCameras();
+
     bool runReconstruction();
+    bool runReconstruction_GE();
+
     VirtualCamera	*cameras;
     QString *calibFolder;
     PointCloudImage *points3DProjView;
@@ -40,21 +37,35 @@ public:
 
     void cam2WorldSpace(VirtualCamera cam, cv::Point3f &p);
 
-    void getParameters(int scanw, int scanh,  int camw, int camh, int scanSN, bool autocontrast, QString savePath);
+    void getParameters(int scanw, int scanh,  int camw, int camh, bool autocontrast, QString savePath);
     QString savePath_;//same as projectPath
+    int scanSN;//表示当前重建的扫描数据序列号，也是输出模型的序列号
 
 private:
+    bool EPI;//是否使用极线校正
     int numOfCams;
     VirtualCamera *camera;//general functions use this instead of camera1 or camera2
+    stereoRect *sr;
+
     cv::vector<cv::Point> **camsPixels;
+    cv::vector<int> **camsPixels_GE;
     cv::vector<cv::Point> *camPixels; //general functions use this instead of cam1Pixels or cam2Pixels
-    bool Reconstruct::loadCamImgs(QString folder, QString prefix, QString suffix);
-    void unloadCamImgs();
+    cv::vector<int> *camPixels_GE;
+
+    bool loadCamImgs(QString folder, QString prefix, QString suffix);
+
+    void unloadCamImgs();//对不同编码模式都适用的卸载图像方法
     void computeShadows();
 
-    bool Reconstruct::getProjPixel(int row, int col, cv::Point &p_out);
+    ///不同编码模式对应的图像点身份获取方法
+    bool getProjPixel(int row, int col, cv::Point &p_out);//GRAY_ONLY
+    bool getProjPixel_GE(int row, int col, int &xDec);//GRAY_EPI
+
     void decodePaterns();
-    void Reconstruct::triangulation(cv::vector<cv::Point> *cam1Pixels, VirtualCamera cameras1, cv::vector<cv::Point> *cam2Pixels, VirtualCamera cameras2, int cam1index, int cam2index);
+    void decodePatterns_GE();
+
+    void triangulation(cv::vector<cv::Point> *cam1Pixels, VirtualCamera cameras1, cv::vector<cv::Point> *cam2Pixels, VirtualCamera cameras2);
+    void triangulation_ge(cv::vector<int> *cam1Pixels, VirtualCamera camera1, cv::vector<int> *cam2Pixels, VirtualCamera camera2);
 
     QString *scanFolder;
     QString *imgPrefix;
@@ -64,10 +75,10 @@ private:
     int numOfRowBits;
     int blackThreshold;
     int whiteThreshold;
-    cv::vector<cv::Mat> camImgs;
-    cv::vector<cv::Mat> colorImgs;
-    cv::Mat color;
-    cv::Mat mask;					//matrix with vals 0 and 1 , CV_8U , uchar
+
+    cv::vector<cv::Mat> camImgs;//用来存放条纹图像序列，不同编码方式通用
+
+    cv::Mat mask;//matrix with vals 0 and 1 , CV_8U , uchar
     cv::Mat decRows;
     cv::Mat decCols;
     bool pathSet;
@@ -75,16 +86,15 @@ private:
     bool raySampling_;
     int cameraWidth;
     int cameraHeight;
-    int scanSN_;//表示当前重建的扫描数据序列号，也是输出模型的序列号
 
     //access
     int Reconstruct::ac(int x,int y)
     {
-        return x*proj_h + y;
+        return x*scan_h + y;
     }
 
-    int proj_w;
-    int proj_h;
+    int scan_w;
+    int scan_h;
 };
 
 #endif // RECONSTRUCT_H

@@ -6,8 +6,8 @@
 #include <opencv2/calib3d/calib3d.hpp>
 
 #include <QObject>
-
-//#define TEST_ASY
+//#define DEBUG
+#define TEST_STEREO
 
 #define CAMCALIB_OUT_MATRIX 1
 #define CAMCALIB_OUT_DISTORTION 2
@@ -17,6 +17,15 @@
 #define CAMCALIB_OUT_STATUS 6
 #define CAMCALIB_OUT_H1 7
 #define CAMCALIB_OUT_H2 8
+#define STEREOCALIB_OUT_MATRIXL 9
+#define STEREOCALIB_OUT_MATRIXR 10
+#define STEREOCALIB_OUT_DISL 11
+#define STEREOCALIB_OUT_DISR 12
+#define STEREOCALIB_OUT_R 13
+#define STEREOCALIB_OUT_T 14
+#define STEREOCALIB_OUT_F 15
+
+using namespace cv;
 
 class CameraCalibration :public QObject
 {
@@ -50,12 +59,25 @@ public:
     cv::Mat H2;
     cv::Mat statusMatrix;
 
+    /****stereoCalib****/
+    Mat camMatrixL;
+    Mat camMatrixR;
+    Mat distortionL;
+    Mat distortionR;
+    Mat R;
+    Mat T;
+    Mat E;
+    Mat F;
+    cv::vector<cv::vector<Point2f>> imgBoardCornersCamL;
+    cv::vector<cv::vector<Point2f>> imgBoardCornersCamR;
+
     cv::vector<cv::vector<cv::Point2f>> imgBoardCornersCam;
 
     cv::vector<cv::Point2f> findFunLeft;//存储基础矩阵计算用的左相机图像角点
     cv::vector<cv::Point2f> findFunRight;
 
     bool isleft;
+    bool useSymmetric;//采用对称标定板或非对称标定板
     double rms;
 
 private:
