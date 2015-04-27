@@ -1,31 +1,45 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+//Qt
 #include <QMainWindow>
 #include <QtGui>
-
 #include <QLabel> 
 #include <QImage>
 #include <QTimer>
 
-#include "set.h"
-#include "dotmatch.h"
+//openCV
 #include <opencv/highgui.h>
 #include <opencv/cv.h>
+
+//SLR
+#include "blobdetector.h"
+#include "cameracalibration.h"
+#include "dotmatch.h"
+#include "glwidget.h"
+
 #include "projector.h"
 #include "reconstruct.h"
 #include "meshcreator.h"
-#include "glwidget.h"
-#include "cameracalibration.h"
-#include "blobdetector.h"
+
+#include "set.h"
+#include "focusassistant.h"
+
 #include "graycodes.h"
 #include "multifrequency.h"
 
-#include "Windows.h"//加载此头文件以解决大恒相机头文件类型未定义问题
-#include <HVDAILT.h>
-#include <Raw2Rgb.h>
+#include "dahengcamera.h"
+#include "baslercamera.h"
+
+#include "imageviewer.h"
+
+#include "stereorect.h"
+
+#define DEBUG//用来观察标记点圆心定位精度
 
 #define WM_SNAP_CHANGE		(WM_USER + 100)
+
+#define CALIBIMGNUM 14
 
 #define PATHCALIB 0
 #define PATHSCAN 1
@@ -42,6 +56,7 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = 0);
     ~MainWindow();
+    FocusAssistant *fa;
     Set *setDialog;
     DotMatch *dm;
     GLWidget *displayModel;
@@ -49,14 +64,16 @@ public:
     QString projectPath;
     QString projChildPath;
 
-    int screenWidth;//screen and projector resolution
+    int screenWidth;//主屏幕几何尺寸
     int screenHeight;
-    int projectorWidth;
+    int projectorWidth;//投影屏幕几何尺寸
     int projectorHeight;
-    int cameraWidth;
+    int scanWidth;//扫描区域尺寸
+    int scanHeight;
+    int cameraWidth;//相机分辨率
     int cameraHeight;
 
-    int scanSquenceNo;//表示当前正在进行的扫描序列数，从0开始
+    int scanSN;//表示当前正在进行的扫描序列数，从0开始
 
 private:
     Ui::MainWindow *ui;
@@ -65,22 +82,25 @@ private:
     GrayCodes *grayCode;
     MultiFrequency *mf;
     Projector *pj;
+    Reconstruct *reconstructor;
+
+    DaHengCamera *DHC;
+    BaslerCamera *BC;
+    bool usebc;//是否使用Basler相机
+    bool showFocus;//是否显示对焦辅助窗口
+
+    ///表示编码及解码重建方法，依次为：经典横竖条纹格雷编码，竖条纹格雷码+极线校正，多频外差条纹+极线校正
+    enum codePattern{GRAY_ONLY, GRAY_EPI, MULTIFREQ_EPI};
+    codePattern codePatternUsed;
 
     void createConnections();
     void createCentralWindow(QWidget *parent);
     void captureImage(QString pref, int saveCount, bool dispaly);
     void findPoint();
+    void paintPoints();
     void getScreenGeometry();
     void closeCamera();
     void generatePath(int type);
-
-    ///---------------相机相关函数---------------///
-
-    void OnSnapexOpen();
-    void OnSnapexStart();
-    void OnSnapexStop();
-    void OnSnapexClose();
-    int OnSnapChange();
 
     ///---------------辅助功能---------------///
 
@@ -95,7 +115,6 @@ private:
     QPixmap pimage_1;//由图像指针得到的.png格式图像
     QPixmap pimage_2;
 
-    bool cameraOpened;
     bool isProjectorOpened;
     bool isConfigured;
     int saveCount;//count the photo captured.
@@ -103,18 +122,6 @@ private:
     QString path_1;
     QString path_2;
 
-    ///////////////////////////////
-    HHV	m_hhv_1;			///< 数字摄像机句柄
-    HHV	m_hhv_2;
-
-    BYTE *ppBuf_1[1];
-    BYTE *ppBuf_2[1];
-
-    BYTE *m_pRawBuffer_1;		///< 采集图像原始数据缓冲区
-    BYTE *m_pRawBuffer_2;
-
-    static int CALLBACK SnapThreadCallback(HV_SNAP_INFO *pInfo);
-    ////////////////////////////////////////////////
     ///与set对话框有关的变量
     int black_ ;
     int white_;
@@ -128,8 +135,12 @@ private slots:
     void openproject();
 
     void opencamera();
-    void exposurecontrol();
+    void startfocusassistant();
+    void closefocus();
+    void setexposure();
     void readframe();
+
+    void usebasler();
 
     void selectPath(int PATH);
 
@@ -143,8 +154,11 @@ private slots:
     void scan();
     void pointmatch();
     void refindmatch();
+    void showhidemanual();
+    void finishmanualmatch();
     void startscan();
     void testmulitfreq();
+    void test();
 
     void reconstruct();
     void startreconstruct();

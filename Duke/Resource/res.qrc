@@ -30,5 +30,8 @@
         <file>projon.png</file>
         <file>en.qm</file>
         <file>zh.qm</file>
+        <file>13.png</file>
+        <file>14.png</file>
+        <file>switch.png</file>
     </qresource>
 </RCC>

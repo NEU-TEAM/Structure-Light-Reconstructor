@@ -12,15 +12,6 @@
 #include <QVector>
 #include <QFont>
 
-const HV_RESOLUTION Resolution = RES_MODE0;
-const HV_SNAP_MODE SnapMode = CONTINUATION;
-const HV_BAYER_CONVERT_TYPE ConvertType = BAYER2RGB_NEIGHBOUR1;
-const HV_SNAP_SPEED SnapSpeed = HIGH_SPEED;
-long ADCLevel           = ADC_LEVEL2;
-const int XStart              = 0;//图像左上角点在相机幅面1280X1024上相对于幅面左上角点坐标
-const int YStart              = 0;
-int scanWidth;//扫描区域
-int scanHeight;
 bool inEnglish = true;
 int nowProgress = 0;//进度条初始化
 
@@ -37,14 +28,21 @@ MainWindow::MainWindow(QWidget *parent)
 
     /*****声明全局变量*****/
     saveCount = 1;//Save calib images start with 1
-    scanSquenceNo = -1;
-    cameraOpened = false;
+    scanSN = -1;
     isConfigured = false;
     isProjectorOpened = true;
 
     /****生成计时器并连接*****/
     timer = new QTimer(this);
     connect(timer, SIGNAL(timeout()), this, SLOT(readframe()));
+
+    /****声明相机****/
+    usebc = false;
+    DHC = new DaHengCamera(this);
+
+    /****生成对焦辅助窗口****/
+    fa = new FocusAssistant();
+    showFocus = false;
 
     /*****生成OpenGL窗口并加载*****/
     displayModel = new GLWidget(ui->displayWidget);
@@ -75,18 +73,9 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
-    if(cameraOpened){
-        OnSnapexStop();
-        OnSnapexClose();
-        HVSTATUS status = STATUS_OK;
-        //	关闭数字摄像机，释放数字摄像机内部资源
-        status = EndHVDevice(m_hhv_1);
-        status = EndHVDevice(m_hhv_2);
-        //	回收图像缓冲区
-        delete []m_pRawBuffer_1;
-        delete []m_pRawBuffer_2;
-    }
+    delete DHC;
     delete pj;
+    delete fa;
     delete blob;
     delete ui;
 }
@@ -95,12 +84,12 @@ void MainWindow::newproject()
 {
     QString dir = QFileDialog::getExistingDirectory(this, tr("Open Directory"),"/home",QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
     projectPath = dir;
-    if(projectPath != "")
-    {
+    if(projectPath != ""){
         for(int i = 0;i<3;i++){
             generatePath(i);
         }
-        dm = new DotMatch(this, projectPath);
+        dm = new DotMatch(this, projectPath, ui->matchAssistant->isChecked());
+        connect(dm,SIGNAL(receivedmanualmatch()),this,SLOT(finishmanualmatch()));
     }
 }
 
@@ -110,138 +99,70 @@ void MainWindow::openproject()
     projectPath = dir;
 }
 
-///---------------------相机-----------------------///
-void MainWindow::exposurecontrol()
+/// ----------相机控制---------- ///
+void MainWindow::setexposure()
 {
-    switch (ui->leftExSlider->value()) {
-    case 0:
-        ADCLevel = ADC_LEVEL3;
-        break;
-    case 1:
-        ADCLevel = ADC_LEVEL2;
-        break;
-    case 2:
-        ADCLevel = ADC_LEVEL1;
-        break;
-    case 3:
-        ADCLevel = ADC_LEVEL0;
-        break;
-    }
-    HVADCControl(m_hhv_1, ADC_BITS, ADCLevel);
-    switch (ui->rightExSlider->value()) {
-    case 0:
-        ADCLevel = ADC_LEVEL3;
-        break;
-    case 1:
-        ADCLevel = ADC_LEVEL2;
-        break;
-    case 2:
-        ADCLevel = ADC_LEVEL1;
-        break;
-    case 3:
-        ADCLevel = ADC_LEVEL0;
-        break;
-    }
-    HVADCControl(m_hhv_2, ADC_BITS, ADCLevel);
+    if (DHC->cameraOpened)
+        DHC->daHengExposure(ui->leftExSlider->value(),ui->rightExSlider->value());
+    else
+        return;
 }
 
 void MainWindow::opencamera()
 {
-    HVSTATUS status_1 = STATUS_OK;
-    HVSTATUS status_2 = STATUS_OK;
-    m_pRawBuffer_1	= NULL;
-    m_pRawBuffer_2	= NULL;
-
-    status_1 = BeginHVDevice(1, &m_hhv_1);
-    status_2 = BeginHVDevice(2, &m_hhv_2);
-    if(status_1==STATUS_OK&&status_2==STATUS_OK)
-        cameraOpened = true;
-    else{
-        cameraOpened = false;
-        QMessageBox::warning(NULL, tr("Cameras not found"), tr("Make sure two Daheng cameras have connected to the computer."));
-        return;
+    if (!usebc){
+        DHC->openDaHengCamera(cameraWidth,cameraHeight);
     }
-    HVSetResolution(m_hhv_1, Resolution);//Set the resolution of cameras
-    HVSetResolution(m_hhv_2, Resolution);
-
-    HVSetSnapMode(m_hhv_1, SnapMode);//Snap mode include CONTINUATION、TRIGGER
-    HVSetSnapMode(m_hhv_2, SnapMode);
-
-    HVADCControl(m_hhv_1, ADC_BITS, ADCLevel);//设置ADC的级别
-    HVADCControl(m_hhv_2, ADC_BITS, ADCLevel);
-
-    HVTYPE type = UNKNOWN_TYPE;//获取设备类型
-    int size    = sizeof(HVTYPE);
-    HVGetDeviceInfo(m_hhv_1,DESC_DEVICE_TYPE, &type, &size);//由于两相机型号相同，故只获取一个
-
-    HVSetOutputWindow(m_hhv_1, XStart, YStart, cameraWidth, cameraHeight);
-    HVSetOutputWindow(m_hhv_2, XStart, YStart, cameraWidth, cameraHeight);
-
-    HVSetSnapSpeed(m_hhv_1, SnapSpeed);//设置采集速度
-    HVSetSnapSpeed(m_hhv_2, SnapSpeed);
-
-    m_pRawBuffer_1 = new BYTE[cameraWidth * cameraHeight];
-    m_pRawBuffer_2 = new BYTE[cameraWidth * cameraHeight];
-
-    OnSnapexOpen();
-    OnSnapexStart();
-    timer->start(30);
-
-    ui->actionOpenCamera->setDisabled(true);//暂时保证不会启动两次，防止内存溢出
-    ui->leftExSlider->setEnabled(true);//激活曝光调整滑块
-    ui->rightExSlider->setEnabled(true);
+    else {
+        BC->openCamera();
+    }
+        ui->actionOpenCamera->setDisabled(true);//暂时保证不会启动两次，防止内存溢出
+        ui->leftExSlider->setEnabled(true);//激活曝光调整滑块
+        ui->rightExSlider->setEnabled(true);
+        ui->actionFocusAssistant->setEnabled(true);//激活对焦辅助
+        timer->start();
+        image_1 = QImage(cameraWidth, cameraHeight, QImage::Format_Indexed8);
+        image_2 = QImage(cameraWidth, cameraHeight, QImage::Format_Indexed8);
 }
 
-void MainWindow::OnSnapexOpen()
+void MainWindow::startfocusassistant()
 {
-    HVSTATUS status = STATUS_OK;
-    status = HVOpenSnap(m_hhv_1, SnapThreadCallback, this);
-    status = HVOpenSnap(m_hhv_2, SnapThreadCallback, this);
+    fa->showFullScreen();
+    showFocus = true;
+    connect(fa, SIGNAL(winhide()), this, SLOT(closefocus()));
 }
 
-void MainWindow::OnSnapexStart()
+void MainWindow::closefocus()
 {
-    HVSTATUS status = STATUS_OK;
-    ppBuf_1[0] = m_pRawBuffer_1;
-    ppBuf_2[0] = m_pRawBuffer_2;
-    status = HVStartSnap(m_hhv_1, ppBuf_1,1);
-    status = HVStartSnap(m_hhv_2, ppBuf_2,1);
-}
-
-void MainWindow::OnSnapexStop()
-{
-    HVSTATUS status = STATUS_OK;
-    status = HVStopSnap(m_hhv_1);
-    status = HVStopSnap(m_hhv_2);
-}
-
-void MainWindow::OnSnapexClose()
-{
-    HVSTATUS status = STATUS_OK;
-    status = HVCloseSnap(m_hhv_1);
-    status = HVCloseSnap(m_hhv_2);
-}
-
-void MainWindow::closeCamera()
-{
-    timer->stop();
-    OnSnapexStop();
-    OnSnapexClose();
-}
-
-int CALLBACK MainWindow::SnapThreadCallback(HV_SNAP_INFO *pInfo)
-{
-    return 1;
+    showFocus = false;
 }
 
 void MainWindow::readframe()
 {
-    image_1 = QImage(m_pRawBuffer_1, cameraWidth, cameraHeight, QImage::Format_Indexed8);
-    image_2 = QImage(m_pRawBuffer_2, cameraWidth, cameraHeight, QImage::Format_Indexed8);
+    if (!usebc){
+    image_1 = QImage(DHC->m_pRawBuffer_1, cameraWidth, cameraHeight, QImage::Format_Indexed8);
+    image_2 = QImage(DHC->m_pRawBuffer_2, cameraWidth, cameraHeight, QImage::Format_Indexed8);
+    }
+    else{
+        image_1 = QImage(BC->pImageBuffer, cameraWidth, cameraHeight, QImage::Format_Indexed8);
+    }
     pimage_1 = QPixmap::fromImage(image_1);
     pimage_2 = QPixmap::fromImage(image_2);
     ui->leftViewLabel->setPixmap(pimage_1);
     ui->rightViewLabel->setPixmap(pimage_2);
+    if(showFocus){
+        if(fa->displayLeft)
+            fa->playImage(pimage_1);
+        else
+            fa->playImage(pimage_2);
+    }
+}
+
+void MainWindow::usebasler()
+{
+    usebc = true;
+    BC = new BaslerCamera(this);
+
 }
 
 ///-------------------标定-------------------///
@@ -251,19 +172,21 @@ void MainWindow::calib()
     selectPath(PATHCALIB);
     ui->tabWidget->setCurrentIndex(0);//go to calibration page
     ui->explainLabel->setPixmap(":/" + QString::number(saveCount) + ".png");
+    ui->captureButton->setEnabled(true);
+    ui->redoButton->setEnabled(true);
     ui->calibButton->setEnabled(true);
 }
 
 
 void MainWindow::capturecalib()
 {
-    if(cameraOpened){
+    if(DHC->cameraOpened){
         captureImage("", saveCount, true);
         ui->currentPhotoLabel->setText(QString::number(saveCount));
         saveCount++;
         QString explain = ":/" + QString::number(saveCount) + ".png";
         ui->explainLabel->setPixmap(explain);
-        if(saveCount == 13){
+        if(saveCount == CALIBIMGNUM+1){
             saveCount = 1;
             ui->calibButton->setEnabled(true);
         }
@@ -275,7 +198,7 @@ void MainWindow::capturecalib()
 
 void MainWindow::redocapture()
 {
-    if(cameraOpened){
+    if(DHC->cameraOpened){
         captureImage("", saveCount - 1, true);
         }
     else
@@ -300,8 +223,7 @@ void MainWindow::captureImage(QString pref, int saveCount,bool dispaly)
                 QPixmap pcopy = pimage_1;
                 QPainter pt(&pcopy);
                 pt.setPen(greencolor);
-                for (size_t i = 0; i < centers.size();i++)
-                {
+                for (size_t i = 0; i < centers.size();i++){
                     drawCross(pt,centers[i].x,centers[i].y);
                 }
                 ui->leftCaptureLabel->setPixmap(pcopy);
@@ -327,6 +249,7 @@ void MainWindow::calibration()
     nowProgress = 0;
     calibrator = new CameraCalibration();
     calibrator->setSquareSize(cvSize(setDialog->cell_w,setDialog->cell_h));
+    calibrator->useSymmetric = ui->useSymmetric->isChecked();
     QString path;
 
     for(int i = 1; i <= 2; i++)
@@ -345,9 +268,17 @@ void MainWindow::calibration()
         //load images
         calibrator->loadCameraImgs(path);
         progressPop(5);
-        calibrator->extractImageCorners();
+        int reval = calibrator->extractImageCorners();
+        if(reval){
+            ui->progressBar->reset();
+            if(reval != CALIBIMGNUM+1)
+                saveCount = reval;
+            return;
+        }
         progressPop(15);
-        calibrator->calibrateCamera();
+        if(!calibrator->calibrateCamera())
+            return;
+        //显示单个相机标定误差
         (i==1)?(ui->leftRMS->setText(QString::number(calibrator->rms))):(ui->rightRMS->setText(QString::number(calibrator->rms)));
         progressPop(10);
         calibrator->findCameraExtrisics();
@@ -375,7 +306,7 @@ void MainWindow::calibration()
         progressPop(10);
     }
     path = projectPath + "/calib/fundamental_mat.txt";
-    calibrator->findFundamental();
+    calibrator->findFundamental();//计算基础矩阵并进行立体标定（若定义）
     calibrator->exportTxtFiles(path.toLocal8Bit(), CAMCALIB_OUT_FUNDAMENTAL);
     path = projectPath + "/calib/H1_mat.txt";
     calibrator->exportTxtFiles(path.toLocal8Bit(), CAMCALIB_OUT_H1);
@@ -383,6 +314,25 @@ void MainWindow::calibration()
     calibrator->exportTxtFiles(path.toLocal8Bit(), CAMCALIB_OUT_H2);
     path = projectPath + "/calib/status_mat.txt";
     calibrator->exportTxtFiles(path.toLocal8Bit(), CAMCALIB_OUT_STATUS);
+#ifdef TEST_STEREO
+    ui->StereoRMS->setText(QString::number(calibrator->rms));
+    path = projectPath + "/calib/fundamental_stereo.txt";
+    calibrator->exportTxtFiles(path.toLocal8Bit(), STEREOCALIB_OUT_F);
+    path = projectPath + "/calib/R_stereo.txt";
+    calibrator->exportTxtFiles(path.toLocal8Bit(), STEREOCALIB_OUT_R);
+    path = projectPath + "/calib/T_stereo.txt";
+    calibrator->exportTxtFiles(path.toLocal8Bit(), STEREOCALIB_OUT_T);
+    for(int i=1;i<=2;i++){
+        QString file_name;
+        path=(i==1)?(projectPath + "/calib/left/"):(projectPath + "/calib/right/");
+        file_name=path;
+        file_name+="cam_stereo.txt";
+        calibrator->exportTxtFiles(file_name.toLocal8Bit(), (i==1)?(STEREOCALIB_OUT_MATRIXL):(STEREOCALIB_OUT_MATRIXR));
+        file_name=path;
+        file_name+="distortion_stereo.txt";
+        calibrator->exportTxtFiles(file_name.toLocal8Bit(), (i==1)?(STEREOCALIB_OUT_DISL):(STEREOCALIB_OUT_DISR));
+    }
+#endif
     ui->progressBar->setValue(100);
 }
 
@@ -392,7 +342,7 @@ void MainWindow::scan()
     ui->progressBar->reset();
     nowProgress = 0;
 
-    if(!cameraOpened){
+    if(!DHC->cameraOpened){
         QMessageBox::warning(this, tr("Cameras are not Opened"), tr("Cameras are not opened."));
         return;
     }
@@ -410,12 +360,14 @@ void MainWindow::scan()
 
 void MainWindow::pointmatch()
 {
+    dm->blocksize = ui->binarySlider->value();
     findPoint();
 }
 
 void MainWindow::refindmatch()
 {
-    dm->scanNo--;
+    if (dm->scanSN == 0)
+        dm->firstFind = true;
     findPoint();
 }
 
@@ -425,13 +377,47 @@ void MainWindow::findPoint()
     {
         dm->dotForMark.clear();
     }
-    cv::Mat mat_1 = cv::Mat(cameraHeight, cameraWidth, CV_8UC1, m_pRawBuffer_1);//直接从内存缓冲区获得图像数据是可行的
-    cv::Mat mat_2 = cv::Mat(cameraHeight, cameraWidth, CV_8UC1, m_pRawBuffer_2);
+    cv::Mat mat_1 = cv::Mat(cameraHeight, cameraWidth, CV_8UC1, DHC->m_pRawBuffer_1);//直接从内存缓冲区获得图像数据是可行的
+    cv::Mat mat_2 = cv::Mat(cameraHeight, cameraWidth, CV_8UC1, DHC->m_pRawBuffer_2);
     //imshow("d",mat_1);
     //cvWaitKey(10);
-    scanSquenceNo = dm->scanNo;
-    ui->scanNoLabel->setText(QString::number(scanSquenceNo));
-    dm->matchDot(mat_1,mat_2);
+    bool success = dm->matchDot(mat_1,mat_2);//在这一步生成了mm
+    if (success){
+        ///保证运行activeManual时mm已经生成
+        if (dm->scanSN != 0){
+            if (ui->matchAssistant->isChecked()){
+                dm->activeManual();
+                ui->manualWindow->setEnabled(true);
+                connect(ui->manualWindow,SIGNAL(clicked()),this,SLOT(showhidemanual()));
+            }
+        }
+        else{
+            paintPoints();
+            if (QMessageBox::information(NULL,tr("Finished"), tr("Is the result right for reconstruction?"),
+                QMessageBox::Yes,QMessageBox::No)== QMessageBox::Yes)
+                finishmanualmatch();
+         }
+    }
+}
+
+void MainWindow::finishmanualmatch()
+{
+    scanSN = dm->scanSN;//这里不能放在finishMatch后面
+    ui->scanSNLabel->setText(QString::number(scanSN+1));//表示已经进行了的扫描次数（实际是查找点次数）
+    dm->finishMatch();
+    paintPoints();
+}
+
+void MainWindow::showhidemanual()
+{
+    if (!dm->mm->isHidden())
+        dm->mm->hide();
+    else
+        dm->mm->show();
+}
+
+void MainWindow::paintPoints()
+{
     QPixmap pcopy_1 = pimage_1;
     QPixmap pcopy_2 = pimage_2;
     QPainter pt_1(&pcopy_1);
@@ -441,8 +427,7 @@ void MainWindow::findPoint()
 
     for(int i = 0;i < dm->dotForMark.size();i++)
     {
-        if (dm->dotForMark[i][4] == 1)
-        {
+        if (dm->dotForMark[i][4] == 1){//表明是已知点
             pt_1.setPen(greencolor);
             pt_2.setPen(greencolor);
             pt_1.drawText(dm->dotForMark[i][0],dm->dotForMark[i][1],QString::number(dm->dotForMark[i][5]));
@@ -450,8 +435,7 @@ void MainWindow::findPoint()
             drawCross(pt_1, dm->dotForMark[i][0] ,dm->dotForMark[i][1]);
             drawCross(pt_2, dm->dotForMark[i][2], dm->dotForMark[i][3]);
         }
-        else
-        {
+        else{//表明是未知点
             pt_1.setPen(orangecolor);
             pt_2.setPen(orangecolor);
             drawCross(pt_1, dm->dotForMark[i][0] ,dm->dotForMark[i][1]);
@@ -460,77 +444,88 @@ void MainWindow::findPoint()
     }
     ui->leftCaptureLabel->setPixmap(pcopy_1);
     ui->rightCaptureLabel->setPixmap(pcopy_2);
+
+#ifdef DEBUG
+    ImageViewer *iv = new ImageViewer;
+    iv->showImage(pcopy_1);
+    iv->show();
+#endif
 }
 
 void MainWindow::startscan()
 {
-    if (scanSquenceNo < 0)
+    if (scanSN < 0)
     {
         if (QMessageBox::warning(this,tr("Mark Point Need to be Found"), tr("Scan result can't be aligned,continue?")
                                  ,QMessageBox::Yes,QMessageBox::No) == QMessageBox::No)
             return;
+        else
+            scanSN = 0;
     }
     ui->progressBar->reset();
     nowProgress = 0;
 
-    closeCamera();
+    DHC->closeCamera();
+    timer->stop();
     pj->displaySwitch(false);
     pj->opencvWindow();
-    if (ui->useGray->isChecked())
-    {
-        grayCode = new GrayCodes(projectorWidth,projectorHeight);
+    if (codePatternUsed == GRAY_ONLY){
+        grayCode = new GrayCodes(scanWidth,scanHeight,false);
         grayCode->generateGrays();
-        pj->showImg(grayCode->getNextImg());
+        pj->showMatImg(grayCode->grayCodes[0]);
     }
-    else
-    {
+    else if (codePatternUsed == GRAY_EPI){
+        grayCode = new GrayCodes(scanWidth,scanHeight,true);
+        grayCode->generateGrays();
+        pj->showMatImg(grayCode->grayCodes[0]);
+    }
+    else{
         mf = new MultiFrequency(this, scanWidth, scanHeight);
         mf->generateMutiFreq();
         pj->showMatImg(mf->getNextMultiFreq());
     }
-    progressPop(10);
+    progressPop(6);
 
     int imgCount = 0;
 
-    QString pref = QString::number(scanSquenceNo) + "/";
+    QString pref = QString::number(scanSN) + "/";
     QDir *addpath_1 = new QDir;
     QDir *addpath_2 = new QDir;
     addpath_1->mkpath(projChildPath + "/left/" + pref);
     addpath_2->mkpath(projChildPath +"/right/" + pref);
 
-    while(true)
-    {
-        cvWaitKey(100);
-        HVSnapShot(m_hhv_1, ppBuf_1, 1);
-        image_1 = QImage(m_pRawBuffer_1, cameraWidth, cameraHeight, QImage::Format_Indexed8);
+    while(true){
+        cv::waitKey(100);
+        DHC->daHengSnapShot(1);
+        image_1 = QImage(DHC->m_pRawBuffer_1, cameraWidth, cameraHeight, QImage::Format_Indexed8);
         pimage_1 = QPixmap::fromImage(image_1);
-
-        HVSnapShot(m_hhv_2, ppBuf_2, 1);
-        image_2 = QImage(m_pRawBuffer_2, cameraWidth, cameraHeight, QImage::Format_Indexed8);
+        DHC->daHengSnapShot(2);
+        image_2 = QImage(DHC->m_pRawBuffer_2, cameraWidth, cameraHeight, QImage::Format_Indexed8);
         pimage_2 = QPixmap::fromImage(image_2);
 
         captureImage(pref, imgCount, false);
         imgCount++;
-        //show captured result
-        if (ui->useGray->isChecked())
-        {
+
+        if (codePatternUsed == GRAY_ONLY){
             if(imgCount == grayCode->getNumOfImgs())
                 break;
-            pj->showImg(grayCode->getNextImg());
+            pj->showMatImg(grayCode->grayCodes[imgCount]);
             progressPop(2);
         }
-        else
-        {
+        else if (codePatternUsed == GRAY_EPI){
+            if(imgCount == grayCode->getNumOfImgs())
+                break;
+            pj->showMatImg(grayCode->grayCodes[imgCount]);
+            progressPop(4);
+        }
+        else{
             if(imgCount == mf->getNumOfImgs())
                 break;
             pj->showMatImg(mf->getNextMultiFreq());
             progressPop(7);
         }
     }
-    HVOpenSnap(m_hhv_1,SnapThreadCallback, this);
-    HVOpenSnap(m_hhv_2,SnapThreadCallback, this);
-    HVStartSnap(m_hhv_1,ppBuf_1,1);
-    HVStartSnap(m_hhv_2,ppBuf_2,1);
+    DHC->openDaHengCamera(cameraWidth,cameraHeight);
     timer->start();
     pj->destoryWindow();
     pj->displaySwitch(true);
@@ -559,10 +554,11 @@ void MainWindow::reconstruct()
 
 void MainWindow::startreconstruct()
 {
+    ///准备工作
     ui->progressBar->reset();
     nowProgress = 0;
-    if(cameraOpened)
-        closeCamera();
+    if(DHC->cameraOpened)
+        DHC->closeCamera();
     if(isConfigured == false){
         if(QMessageBox::warning(this,tr("Warning"), tr("You may want to change the settings, continue with default settings?"),
                 QMessageBox::Yes,QMessageBox::No) == QMessageBox::No)
@@ -571,15 +567,19 @@ void MainWindow::startreconstruct()
             isConfigured = true;
     }
 
-    Reconstruct *reconstructor= new Reconstruct();
-    int scanCount = (ui->manualReconstruction->isChecked())?(ui->reconstructionCount->value()):(scanSquenceNo);
-    reconstructor->getParameters(scanWidth, scanHeight, cameraWidth, cameraHeight, scanCount, isAutoContrast, projectPath);
+    if (codePatternUsed == GRAY_ONLY)
+        reconstructor = new Reconstruct(false);
+    else if (codePatternUsed == GRAY_EPI)
+        reconstructor = new Reconstruct(true);
+
+    reconstructor->scanSN = (ui->manualReconstruction->isChecked())?(ui->reconstructionCount->value()):(scanSN);
+    reconstructor->getParameters(scanWidth, scanHeight, cameraWidth, cameraHeight, isAutoContrast, projectPath);
 
     reconstructor->setCalibPath(projectPath+"/calib/left/", 0);
     reconstructor->setCalibPath(projectPath+"/calib/right/", 1);
     bool loaded = reconstructor->loadCameras();//load camera matrix
-    if(!loaded)
-    {
+
+    if(!loaded){
         ui->progressBar->reset();
         nowProgress = 0;
         return;
@@ -595,23 +595,38 @@ void MainWindow::startreconstruct()
         reconstructor->disableRaySampling();
     progressPop(15);
 
-    bool runSucess = reconstructor->runReconstruction();
-    if(!runSucess)
-    {
-        ui->progressBar->reset();
-        nowProgress = 0;
-        return;
+    ///至此准备工作完成，下面根据采用编码及解码方式的不同分别进行解相及重建
+    if (codePatternUsed == GRAY_ONLY){
+        bool runSucess = reconstructor->runReconstruction();
+        if(!runSucess){
+            ui->progressBar->reset();
+            nowProgress = 0;
+            return;
+        }
+        progressPop(50);
     }
-    progressPop(50);
+    else if (codePatternUsed == GRAY_EPI){//再次注意：条件判断用双等号！！
+        bool runSucess = reconstructor->runReconstruction_GE();
+        if(!runSucess){
+            ui->progressBar->reset();
+            nowProgress = 0;
+            return;
+        }
+        progressPop(50);
+    }
+    else{
+        ///多频外差解相
+    }
+
 
     MeshCreator *meshCreator=new MeshCreator(reconstructor->points3DProjView);//Export mesh
     progressPop(10);
 
     if(isExportObj)
-        meshCreator->exportObjMesh(projChildPath + QString::number(scanSquenceNo) + ".obj");
-    if(isExportPly || !(isExportObj || isExportPly))
-    {
-        QString outPlyPath = projChildPath + QString::number(scanSquenceNo) + ".ply";
+        meshCreator->exportObjMesh(projChildPath + QString::number(reconstructor->scanSN) + ".obj");
+
+    if(isExportPly || !(isExportObj || isExportPly)){
+        QString outPlyPath = projChildPath + QString::number(reconstructor->scanSN) + ".ply";
         meshCreator->exportPlyMesh(outPlyPath);
         displayModel->LoadModel(outPlyPath);
     }
@@ -644,6 +659,16 @@ void MainWindow::getSetInfo()
     isRaySampling = setDialog->raySampling;
     isExportObj = setDialog->exportObj;
     isExportPly = setDialog->exportPly;
+    switch (setDialog->usedPattern){
+        case 0:
+        codePatternUsed = GRAY_ONLY;
+        break;
+        case 1:
+        codePatternUsed = GRAY_EPI;
+        break;
+        case 2:
+        codePatternUsed = MULTIFREQ_EPI;
+    }
 }
 
 
@@ -653,8 +678,11 @@ void MainWindow::createConnections()
     connect(ui->actionOpen, SIGNAL(triggered()), this, SLOT(openproject()));
 
     connect(ui->actionOpenCamera, SIGNAL(triggered()), this, SLOT(opencamera()));
-    connect(ui->leftExSlider,SIGNAL(valueChanged(int)),this,SLOT(exposurecontrol()));
-    connect(ui->rightExSlider,SIGNAL(valueChanged(int)),this,SLOT(exposurecontrol()));
+    connect(ui->actionFocusAssistant, SIGNAL(triggered()), this, SLOT(startfocusassistant()));
+    connect(ui->leftExSlider,SIGNAL(valueChanged(int)),this,SLOT(setexposure()));
+    connect(ui->rightExSlider,SIGNAL(valueChanged(int)),this,SLOT(setexposure()));
+
+    connect(ui->actionBasler, SIGNAL(triggered()), this, SLOT(usebasler()));//暂时用来调试的功能
 
     connect(ui->actionProjector,SIGNAL(triggered()),this,SLOT(projectorcontrol()));
 
@@ -670,6 +698,7 @@ void MainWindow::createConnections()
     connect(ui->reFindButton,SIGNAL(clicked()),this,SLOT(refindmatch()));
     connect(ui->startScanButton, SIGNAL(clicked()), this, SLOT(startscan()));
     connect(ui->multiFreqTest, SIGNAL(clicked()), this, SLOT(testmulitfreq()));
+    //connect(ui->testR, SIGNAL(clicked()), this, SLOT(test()));//用于测试功能的暂时按键
 
     connect(ui->actionReconstruct,SIGNAL(triggered()),this,SLOT(reconstruct()));
     connect(ui->reconstructionButton,SIGNAL(clicked()),this,SLOT(startreconstruct()));
@@ -681,6 +710,7 @@ void MainWindow::createConnections()
     connect(ui->loadTest, SIGNAL(clicked()), this, SLOT(loadTestModel()));
 
     connect(ui->actionExit, SIGNAL(triggered()), pj, SLOT(close()));//解决投影窗口不能关掉的问题
+    connect(ui->actionExit, SIGNAL(triggered()), fa, SLOT(close()));
     connect(ui->actionExit, SIGNAL(triggered()), this, SLOT(close()));
 }
 
@@ -691,8 +721,7 @@ void MainWindow::generatePath(int type)
     selectPath(type);
     QDir *addpath_1 = new QDir;
     QDir *addpath_2 = new QDir;
-    if(type == 0 || type == 1)
-    {
+    if(type == 0 || type == 1){
         addpath_1->mkpath(projChildPath + "/left/");
         addpath_2->mkpath(projChildPath +"/right/");
     }
@@ -732,8 +761,8 @@ void MainWindow::getScreenGeometry()
 {
     QDesktopWidget* desktopWidget = QApplication::desktop();
     int screencount = desktopWidget->screenCount();//get screen amount
-    if(screencount == 1){
-    }
+    if(screencount == 1)
+        QMessageBox::information(this,tr("Info"),tr("Only one screen detected."));
     else{
         QRect screenRect = desktopWidget->screenGeometry(0);
         screenWidth = screenRect.width();
@@ -745,15 +774,13 @@ void MainWindow::switchlanguage()
 {
     QString qmPath = ":/";//表示从资源文件夹中加载
     QString local;
-    if(inEnglish)
-    {
+    if(inEnglish){
         local = "zh.pm";
         inEnglish = false;
         ui->actionEnglish->setEnabled(true);
         ui->actionChinese->setDisabled(true);
     }
-    else
-    {
+    else{
         local = "en.pm";
         inEnglish = true;
         ui->actionEnglish->setEnabled(false);
@@ -773,13 +800,11 @@ void MainWindow::changePointSize(int psize)
 
 void MainWindow::loadTestModel()
 {
-    if (projChildPath != NULL)
-    {
+    if (projChildPath != NULL){
         QString testPath = projChildPath + "0.ply";
         displayModel->LoadModel(testPath);
     }
-    else
-    {
+    else{
         QMessageBox::warning(NULL,tr("File Not Found"),tr("Test file doesn't exist."));
         return;
     }
@@ -797,4 +822,15 @@ void MainWindow::drawCross(QPainter &p, int x, int y)
     int len = 25;
     p.drawLine(x - len, y, x + len, y);
     p.drawLine(x, y - len, x, y + len);
+}
+
+void MainWindow::test()
+{
+    stereoRect *sr = new stereoRect(projectPath);
+    QString path1 = projectPath + "/scan/left/0/L0.png";
+    QString path2 = projectPath + "/scan/right/0/R0.png";
+    cv::Mat img1 = imread(path1.toStdString());
+    cv::Mat img2 = imread(path2.toStdString());
+    sr->getParameters();
+    //sr->doStereoRectify(img1,img2);
 }
